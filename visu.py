@@ -209,18 +209,19 @@ elif page == "Player Stats":  # test
 
 elif page == "SQL Queries & Analytics":
 
-    elif page == "SQL Queries & Analytics":
-
     st.title("📊 SQL Analytics")
 
     query_option = st.selectbox(
         "Select Analysis",
-        [
-            "Players Representing India",
-            "Recent Matches (Last Few Days)"
+        ["Players Representing India",
+        "Recent Matches (Last Few Days)",
+        "Top 10 highest run in ODI",
+        "Top 10 Largest Cricket Venues (2026)",
+        "Most Successful International Cricket Teams",
+        "Player Role Count",
+        "Highest Individual Scores by Format"
         ]
     )
-
     queries = {
 
         "Players Representing India": """
@@ -231,29 +232,71 @@ elif page == "SQL Queries & Analytics":
             bowling_style
         FROM public.q1_players_india
         """,
-
         "Recent Matches (Last Few Days)": """
         SELECT
             team1,
             team2,
             venue,
             match_date
-        FROM public.recent_matches
+        FROM public.q2_recent_matches
         ORDER BY match_date DESC
-        """
+        """,
+        "Top 10 highest run in ODI": """
+        SELECT
+            playerid,
+            player,
+            matches,
+            innings,
+            runs,
+            average,
+            century
+        FROM public.top10_odi
+        LIMIT 10
+        """,
+        "Top 10 Largest Cricket Venues (2026)": """
+        SELECT
+            venue_ground,
+            city,
+            country,
+            capacity
+        FROM public.q4_venu;
+        """,
+         "Most Successful International Cricket Teams": """
+        SELECT
+            team_name,
+            total_wins
+	    FROM public.q5_most_wins;
+        """,
+         "Player Role Count": """
+        SELECT
+            simplified_role,
+            player_count
+	    FROM public.q6_player_roles;
+        """,
+        "Highest Individual Scores by Format": """
+        SELECT 'ODI' AS format, MAX(runs) AS highest_score FROM odi
+        UNION ALL
+        SELECT 'Test' AS format, MAX(runs) AS highest_score
+        FROM test_mat
+        UNION ALL
+        SELECT 'T20I' AS format, MAX(runs) AS highest_score
+        FROM t20_mat;
+        """,
+        "Player Role Count": """
+        SELECT
+            simplified_role,
+            player_count
+	    FROM public.q6_player_roles;
+        """,
     }
 
     try:
         conn = get_db_connection()
 
         query = queries[query_option]
-
         df = pd.read_sql(query, conn)
-
         st.dataframe(df)
-
         conn.close()
-
     except Exception as e:
         st.error(f"Database Error: {e}")
 
