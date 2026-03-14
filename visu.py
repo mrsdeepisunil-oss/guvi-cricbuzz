@@ -8,7 +8,7 @@ import requests
 st.set_page_config(page_title="Cricbuzz Dashboard Pro", layout="wide")
 
 HEADERS = {
-    "x-rapidapi-key": "095038d962msh9068af945c80bc9p1ad37cjsna03b2a42de54",
+    "x-rapidapi-key": "35af2ec44amsh9bf8173e77da1c2p13358ejsn3a9ce0e712f9",
     "x-rapidapi-host": "cricbuzz-cricket.p.rapidapi.com"
 }
 
