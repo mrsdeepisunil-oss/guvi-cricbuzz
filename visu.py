@@ -4,21 +4,26 @@ import psycopg2
 import requests
 
 # --- 1. CONFIGURATION ---
+# IMPORTANT: st.set_page_config MUST be the very first Streamlit command
 st.set_page_config(page_title="Cricbuzz Dashboard Pro", layout="wide")
 
 HEADERS = {
-    "X-RapidAPI-Key": "2454e52ef7msha9ad8a68de89ea1p1b4c51jsn18b293bbd472",
-    "X-RapidAPI-Host": "cricbuzz-cricket.p.rapidapi.com"
+    "x-rapidapi-key": "095038d962msh9068af945c80bc9p1ad37cjsna03b2a42de54",
+    "x-rapidapi-host": "cricbuzz-cricket.p.rapidapi.com"
 }
 
 # --- 2. HELPER FUNCTIONS ---
 
 def get_db_connection():
-    return psycopg2.connect(
-        host='localhost', database='cricbuzz',
-        user='postgres', password='deepika@88', port=5432
-    )
-# Streamlit decorator used to cache the output of a function
+    try:
+        return psycopg2.connect(
+            host='localhost', database='cricbuzz',
+            user='postgres', password='deepika@88', port=5432
+        )
+    except Exception as e:
+        st.error(f"Database Connection Failed: {e}")
+        return None
+
 @st.cache_data(ttl=60)
 def fetch_api(endpoint, params=None):
     url = f"https://cricbuzz-cricket.p.rapidapi.com/{endpoint}"
@@ -38,175 +43,166 @@ page = st.sidebar.selectbox(
 
 # --- 4. PAGE LOGIC ---
 
+# ---------------- HOME PAGE ----------------
 if page == "Home Page":
     st.title("🏠 Cricket Analytics Hub")
-    st.write("Welcome to your comprehensive cricket management system.")
-    st.info("Select a page from the sidebar to begin.")
+    st.markdown("### **Welcome to your comprehensive cricket management system.**")
+    st.info("👈 Select a page from the sidebar to navigate.")
 
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("#### 🛠️ Tools & Technologies")
+        st.write("- **Frontend:** Streamlit")
+        st.write("- **Database:** PostgreSQL")
+    with col2:
+        st.markdown("#### 📊 Key Features")
+        st.write("- **Real-time:** Live match scorecards.")
+        st.write("- **CRUD:** Manage your own cricket records.")
+
+# ---------------- LIVE MATCH PAGE ----------------
 elif page == "Live Match Page":
-    st.title("📡 Live Match Status")
+    st.title("🏏 Live Match Scorecard")
     data = fetch_api("matches/v1/live")
     
-    match_map = {}
-    if data:
-        for match_type in data.get('typeMatches', []):
-            for series in match_type.get('seriesMatches', []):
-                if 'seriesAdWrapper' in series:
-                    for m in series['seriesAdWrapper'].get('matches', []):
-                        m_info = m.get('matchInfo', {})
-                        name = f"{m_info.get('team1', {}).get('teamName')} vs {m_info.get('team2', {}).get('teamName')}"
-                        match_map[name] = m_info.get('matchId')
+    matches = []
+    if data and "typeMatches" in data:
+        for type_match in data.get("typeMatches", []):
+            for series_matches in type_match.get('seriesMatches', []):
+                series_data = series_matches.get('seriesAdWrapper', {})
+                series_name = series_data.get('seriesName', "Unknown Series")
+                for match in series_data.get('matches', []):
+                    info = match.get('matchInfo', {})
+                    if info:
+                        matches.append({
+                            "matchId": info.get('matchId'),
+                            "display_name": f"{info.get('team1',{}).get('teamName')} vs {info.get('team2',{}).get('teamName')} ({series_name})",
+                            "format": info.get('matchFormat'),
+                            "venue": info.get('venueInfo', {}).get('ground'),
+                            "status": info.get('status')
+                        })
 
-    if match_map:
-        selected_match = st.selectbox("Select a Live Match", options=list(match_map.keys()))
-        m_id = match_map[selected_match]  
-        st.write(f"Showing details for: **{selected_match}**")
+    if matches:
+        df_live = pd.DataFrame(matches)
+        selected_index = st.selectbox("Choose a match:", range(len(df_live)), format_func=lambda i: df_live.iloc[i]["display_name"])
+        selected_match = df_live.iloc[selected_index]
         
-        # Fetch detailed info for selected match
-        details = fetch_api(f"msc/v1/scorecard/{m_id}")
-        if details:
-            st.subheader(f"🏏 {selected_match}")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Status", details.get('status', 'N/A'))
-            col2.metric("Venue", details.get('venue', {}).get('name', 'N/A'))
-            col3.metric("Toss", details.get('tossResults', {}).get('tossWinnerName', 'N/A'))
-            
-            st.write("---")
-            st.markdown("### 📊 Basic Scorecard")
-            # This is a simplified display of the nested JSON
-            st.json(details.get('scorecard', "Scorecard data loading..."))
-    else:
-        st.warning("No live matches currently available.")
+        st.metric("Status", selected_match["status"])
+        
+        scard_data = fetch_api(f"mcenter/v1/{selected_match['matchId']}/scard")
+        scorecard = scard_data.get('scorecard', []) if scard_data else []
 
-elif page == "Player Stats":  # test
-
-    import requests
-    import streamlit as st
-
-    # RapidAPI configuration
-    API_KEY = "2454e52ef7msha9ad8a68de89ea1p1b4c51jsn18b293bbd472"
-    API_HOST = "cricbuzz-cricket.p.rapidapi.com"
-
-    headers = {
-        "X-RapidAPI-Key": API_KEY,
-        "X-RapidAPI-Host": API_HOST
-    }
-
-    # Function to call API
-    def fetch_api(endpoint, params=None):
-        try:
-            url = f"https://{API_HOST}/{endpoint}"
-            response = requests.get(url, headers=headers, params=params)
-            return response.json()
-        except Exception as e:
-            st.error(f"API Error: {e}")
-            return None
-
-
-    # Streamlit UI
-    st.title("🏏 Cricket Player Dashboard")
-
-    player_name = st.text_input("Enter Player Name")
-
-    if st.button("Search Player"):
-
-        if player_name.strip() == "":
-            st.warning("Please enter a player name")
-            st.stop()
-
-        # STEP 1: Search player
-        search_data = fetch_api(
-            "stats/v1/player/search",
-            params={"q": player_name}
-        )
-
-        # Debug (optional)
-        # st.json(search_data)
-
-        if search_data and "player" in search_data and len(search_data["player"]) > 0:
-
-            player_id = search_data["player"][0]["id"]
-
-            st.success(f"Player Found (ID: {player_id})")
-
-            # STEP 2: Get player profile
-            info = fetch_api(f"stats/v1/player/{player_id}")
-
-            if info:
-
-                st.header(info.get("name", "N/A"))
-
-                col1, col2 = st.columns([1,2])
-
-                with col1:
-                    if info.get("image"):
-                        st.image(info.get("image"), width=200)
-
-                with col2:
-                    st.write("**Role:**", info.get("role","N/A"))
-                    st.write("**Batting Style:**", info.get("bat","N/A"))
-                    st.write("**Bowling Style:**", info.get("bowl","N/A"))
-                    st.write("**International Team:**", info.get("intlTeam","N/A"))
-                    st.write("**Birth Place:**", info.get("birthPlace","N/A"))
-                    st.write("**Date of Birth:**", info.get("DoBFormat","N/A"))
-
-                st.subheader("Teams Played")
-                st.write(info.get("teams","N/A"))
-
-                st.divider()
-
-                # STEP 3: Career Stats
-                career = fetch_api(f"stats/v1/player/{player_id}/career")
-
-                if career and "values" in career:
-
-                    st.subheader("🏏 Career Stats")
-
-                    for format_data in career["values"]:
-                        format_name = format_data.get("name")
-
-                        st.markdown(f"### {format_name}")
-
-                        for stat in format_data["values"]:
-                            st.write(f"{stat['key']} : {stat['value']}")
-
+        if not scorecard:
+            st.warning("Detailed scorecard not yet available.")
         else:
-            st.error("Player not found. Try another name.")
+            tabs = st.tabs([f"{inn.get('batteamname')} Innings" for inn in scorecard])
+            for i, inn in enumerate(scorecard):
+                with tabs[i]:
+                    st.subheader(f"Score: {inn.get('score')}/{inn.get('wickets')} ({inn.get('overs')} ov)")
+                    st.markdown("#### Batting")
+                    st.table(pd.DataFrame(inn.get('batsman', []))[['name', 'outdec', 'runs', 'balls', 'fours', 'sixes', 'strkrate']])
+                    st.markdown("#### Bowling")
+                    st.table(pd.DataFrame(inn.get('bowler', []))[['name', 'overs', 'maidens', 'runs', 'wickets', 'economy']])
+    else:
+        st.info("No live matches found.")
 
-# elif page == "Player Stats":
-#     st.title("🏆 Player Career Profile")
-#     search_query = st.text_input("Search Player (e.g., Virat Kohli)", "Virat Kohli")
+# ---------------- PLAYER STATS ----------------
+elif page == "Player Stats":
+        st.title("🏆 Player Performance & Rankings")
     
-#     if search_query:
-#         # Step 1: Search for Player to get ID
-#         search_data = fetch_api("stats/v1/player/search", params={"name": search_query})
-#         if search_data and search_data.get('player'):
-#             p_id = search_data['player'][0]['id']
-            
-#             # Step 2: Get Personal Details & Career Stats
-#             info = fetch_api(f"stats/v1/player/{p_id}")
-#             career = fetch_api(f"stats/v1/player/{p_id}/career")
-            
-#             if info and career:
-#                 st.header(f"👤 {info.get('name')}")
-                
-#                 # Layout for personal details
-#                 c1, c2, c3 = st.columns(3)
-#                 c1.write(f"**DOB:** {info.get('dateOfBirth')}")
-#                 c2.write(f"**Height:** {info.get('height')}")
-#                 c3.write(f"**Birth Place:** {info.get('birthPlace')}")
-#                 st.write(f"**Teams Played for:** {info.get('teams')}")
-                
-#                 # Career Stats Tabs
-#                 tab1, tab2 = st.tabs(["🏏 Batting Stats", "🥎 Bowling Stats"])
-#                 with tab1:
-#                     if 'values' in career:
-#                         st.dataframe(pd.DataFrame(career['values']))
-#                     else:
-#                         st.write("Batting stats not available.")
-#                 with tab2:
-#                     st.write("Bowling career data is available in the career JSON object.")
+        # 1. Initialize Tabs
+        stat_tab, rank_tab = st.tabs(["📊 Leaderboards (Top Stats)", "🥇 ICC Rankings"])
 
+        # 2. --- TAB 1: TOP STATS (LEADERBOARDS) ---
+        with stat_tab:
+            st.subheader("📊 Global Player Leaderboards")
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                year = st.selectbox("Year", ["2026", "2025", "2024", "2023"], index=2) # Default to 2024
+            with col2:
+                m_type = st.selectbox("Format", ["Test", "ODI", "T20"])
+                m_map = {"Test": "1", "ODI": "2", "T20": "3"}
+            with col3:
+                # These keys must match the API's 'statsType' exactly
+                s_type = st.selectbox("Category", [
+                    "mostRuns", "mostWickets", "highestScore", 
+                    "bestBowling", "mostSixes", "mostFours"
+                ])
+
+            if st.button("Generate Leaderboard", type="primary"):
+                params = {
+                    "statsType": s_type,
+                    "year": year,
+                    "matchType": m_map[m_type]
+                }
+                
+                # Calling your fetch function
+                data = fetch_api("stats/v1/topstats/0", params=params)
+
+                if data and "values" in data:
+                    leaderboard_list = []
+                    
+                    # ONLY ONE LOOP
+                    for entry in data["values"]:
+                        row_values = entry.get("values", [])
+                        
+                        # Check if row has data and avoid empty entries
+                        if len(row_values) >= 4 and row_values[1] is not None:
+                            leaderboard_list.append({
+                                "Rank": row_values[0],
+                                "Player": row_values[1],
+                                "Matches": row_values[2],
+                                "Stat Value": row_values[3]
+                            })
+                    
+                    # Create the DataFrame ONCE
+                    df_leader = pd.DataFrame(leaderboard_list)
+                    
+                    # Convert 'Stat Value' to numeric for the chart
+                    df_leader["Stat Value"] = pd.to_numeric(df_leader["Stat Value"], errors='coerce')
+                    
+                    # 1. Display the Table (using dataframe for better look)
+                    st.subheader("Leaderboard Table")
+                    st.dataframe(df_leader, hide_index=True, use_container_width=True)
+                    
+                    # 2. Display the Chart
+                    st.subheader("Performance Chart")
+                    st.bar_chart(df_leader.set_index("Player")["Stat Value"])
+                                                
+                else:
+                    st.warning("No data returned. The API may not have stats for this specific combination yet.")
+        # 3. --- TAB 2: RANKINGS ---
+        with rank_tab:
+            st.subheader("Current ICC Player Rankings")
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                rank_category = st.selectbox("Category", ["batsmen", "bowlers", "allrounders"])
+            with c2:
+                rank_format = st.selectbox("Format", ["test", "odi", "t20"], key="rank_format")
+
+            if st.button("Fetch Rankings"):
+                endpoint = f"stats/v1/rankings/{rank_category}"
+                params = {"formatType": rank_format}
+                
+                rank_data = fetch_api(endpoint, params=params)
+                
+                if rank_data and "rank" in rank_data:
+                    ranks = []
+                    for item in rank_data["rank"]:
+                        ranks.append({
+                            "Rank": item.get("rank"),
+                            "Name": item.get("name"),
+                            "Country": item.get("country"),
+                            "Rating": item.get("rating"),
+                            "Trend": item.get("trend")
+                        })
+                    
+                    df_rank = pd.DataFrame(ranks)
+                    st.table(df_rank)
+                else:
+                    st.warning("Could not retrieve rankings.")
+   
 elif page == "SQL Queries & Analytics":
 
     st.title("📊 SQL Analytics")
@@ -219,7 +215,25 @@ elif page == "SQL Queries & Analytics":
         "Top 10 Largest Cricket Venues (2026)",
         "Most Successful International Cricket Teams",
         "Player Role Count",
-        "Highest Individual Scores by Format"
+        "Highest Individual Scores by Format",
+        "2024 Cricket Series",
+        "All-rounders: Runs >1000 & Wickets >50",
+        "Last 20 Completed Matches Details",
+        "Player Performance Across Formats (Test, ODI, T20I)",
+        "Team Performance: Home vs Away Wins",
+        "Century Partnerships",
+        "Venue Economy",
+        "Close Game Performers",
+        "Player Performance by Year",
+        "Toss Outcome Analysis",
+        "Limited-Overs Economy",
+        "Player Consistency",
+        "Player Format Stats",
+        "Player Format Ranking",
+        "Head-to-Head Analysis",
+        "Player Form Status",
+        "Successful Partnerships",
+        "Time-series analysis"
         ]
     )
     queries = {
@@ -282,35 +296,138 @@ elif page == "SQL Queries & Analytics":
         SELECT 'T20I' AS format, MAX(runs) AS highest_score
         FROM t20_mat;
         """,
-        "Player Role Count": """
-        SELECT
-            simplified_role,
-            player_count
-	    FROM public.q6_player_roles;
+        "2024 Cricket Series": """
+        SELECT * from q8_match_2024;
+        """,
+        "All-rounders: Runs >1000 & Wickets >50": """
+        select * from public.q9_allround_rank
+        """,
+        "Last 20 Completed Matches Details": """
+        select * from public.q10_last20matches
+        """,
+        "Player Performance Across Formats (Test, ODI, T20I)": """
+        select * from public.play_diff_match
+        """,
+        "Team Performance: Home vs Away Wins": """
+        select * from public.q12_count_of_wins
+        """,
+        "Century Partnerships": """
+        select * from public.scard_partner
+        """,
+        "Venue Economy": """
+        select * from public.q14_bowler_perf
+        """,
+        "Close Game Performers": """
+        select * from public.q15_performance
+        """,
+        "Player Performance by Year": """
+        select * from public.q16_2020
+        """,
+        "Toss Outcome Analysis": """
+        select * from public.q17_toss
+        """,
+        "Limited-Overs Economy": """
+        select * from q18_bowl_economy
+        """,
+        "Player Consistency": """
+        select * from q19_stddevi_2022
+        """,
+        "Player Format Stats": """
+        select * from q20_diff_match
+        """,
+        "Player Format Ranking": """
+        select * from q21_players_ranking
+        """,
+         "Head-to-Head Analysis": """
+        select * from public.q22_3years
+        """,
+         "Player Form Status": """
+        select * from public.q23
+        """,
+         "Successful Partnerships": """
+        select * from public.q24_batting_partner
+        """,
+        "Time-series analysis": """
+        select * from public.q25_performance_trend
         """,
     }
 
     try:
         conn = get_db_connection()
 
-        query = queries[query_option]
-        df = pd.read_sql(query, conn)
-        st.dataframe(df)
+        if query_option == "Team Performance: Home vs Away Wins":
+
+            col1, col2 = st.columns(2)
+
+            # Home Wins
+            with col1:
+                st.subheader("🏠 Home Wins")
+                df_home = pd.read_sql("SELECT * FROM public.q12_count_of_wins", conn)
+                st.dataframe(df_home)
+
+            # Away Wins
+            with col2:
+                st.subheader("✈️ Away Wins")
+                df_away = pd.read_sql("SELECT * FROM public.away_wins", conn)
+                st.dataframe(df_away)
+
+        elif query_option == "Head-to-Head Analysis":
+            col1, col2 = st.columns(2)
+
+            # Wins for each team
+            with col1:
+                st.subheader("Wins for Each Team")
+                df_wins = pd.read_sql("""
+                    SELECT result_short AS team, COUNT(*) AS wins
+                    FROM public.q22_test
+                    GROUP BY result_short
+                """, conn)
+                st.dataframe(df_wins)
+
+            # Total Matches
+            with col2:
+                st.subheader("Total Matches Played")
+                df_total = pd.read_sql("""
+                    SELECT team1, team2, COUNT(*) AS total_matches
+                    FROM public.q22_final
+                    GROUP BY team1, team2
+                """, conn)
+                st.dataframe(df_total)
+
+            # NEW TABLE BELOW (Draw Matches)
+            st.subheader("H2H Matches Details")
+            df_h2h = pd.read_sql("""
+                 select * from public.q22_3years
+            """, conn)
+            st.dataframe(df_h2h)
+
+        elif query_option == "Time-series analysis":
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Wins for Each Team")
+                df_timeseries = pd.read_sql("""
+                    SELECT * FROM public.q25_performance_trend
+                """, conn)
+                st.dataframe(df_timeseries)
+            with col2:
+            # Quarterly Average Performance
+                st.subheader("Quarterly Average Performance")
+                df_qaperf = pd.read_sql("SELECT * FROM public.q25_quarterly_avg", conn)
+                st.dataframe(df_qaperf)   
+
+        else:
+            query = queries[query_option]
+            df = pd.read_sql(query, conn)
+            st.dataframe(df)
+
         conn.close()
+
     except Exception as e:
         st.error(f"Database Error: {e}")
-
+  
 elif page == "CRUD Operations":
     st.title("⚙️ Database CRUD")
-    # with st.form("crud_form"):
-    #     p_name = st.text_input("Player Name")
-    #     action = st.selectbox("Action", ["Create", "Update", "Delete"])
-    #     submitted = st.form_submit_button("Execute")
-        
-    #     if submitted:
-    #         # Here you would add logic: cur.execute("INSERT INTO...")
-    #         st.success(f"Action '{action}' simulated for {p_name}")
-
+    
     conn = get_db_connection()
     cur = conn.cursor()
 
