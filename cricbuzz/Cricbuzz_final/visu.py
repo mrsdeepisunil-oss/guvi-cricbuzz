@@ -131,7 +131,7 @@ elif page == "Player Stats":
     with col1:
         player_query = st.text_input("Search", value=st.session_state['search_val'], placeholder="Enter name...", label_visibility="collapsed")
     with col2:
-        search_button = st.button("Find Matches", use_container_width=True)
+        search_button = st.button("Search player", use_container_width=True)
 
     headers = {
         "x-rapidapi-key": "35af2ec44amsh9bf8173e77da1c2p13358ejsn3a9ce0e712f9",
