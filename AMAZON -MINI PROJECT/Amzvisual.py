@@ -42,7 +42,7 @@ if category == "Executive Dashboards":
     question = st.sidebar.radio("Choose Dashboard:", ["Executive Summary", "Performance Monitor", "Strategic Overview",
                                                        "Financial Performance", "Growth Analytics"])
 elif category == "Revenue Analytics":
-    question = st.sidebar.radio("Choose Dashboard:", ["Revenue Trends", "Sales by Category", "Customer Lifetime Value",
+    question = st.sidebar.radio("Choose Dashboard:", ["Revenue Trends", "Sales by Category", "Geographic Revenue Analysis",
                                                        "Seasonality Analysis", "Discount Impact"])
 elif category == "Customer Analytics":
     question = st.sidebar.radio("Choose Dashboard:", ["RFM Segmentation", "Customer Journey", "Prime vs Non-Prime", "Retention & Churn", "Demographics"])
