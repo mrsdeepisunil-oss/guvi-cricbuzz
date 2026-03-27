@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import psycopg2
 import requests
+import numpy as np
 import plotly.express as px
 
 def get_db_connection():
@@ -51,7 +52,7 @@ elif category == "Product & Inventory":
     question = st.sidebar.radio("Choose Dashboard:", ["Product Performance", "Inventory Turnover", "Stockout Analysis",
                                                        "Supplier Performance", "Pricing Strategy"])
 elif category == "Operations & Logistics":
-    question = st.sidebar.radio("Choose Dashboard:", ["Fulfillment Efficiency", "Delivery Performance", "Returns Analysis",
+    question = st.sidebar.radio("Choose Dashboard:", ["Fulfillment Efficiency", "Payment Analytics", "Returns Analysis",
                                                        "Warehouse Utilization", "Last-Mile Delivery"])
 elif category == "Advanced Analytics":
     question = st.sidebar.radio("Choose Dashboard:", ["Predictive Sales", "Customer Churn Prediction", "Product Recommendation",
