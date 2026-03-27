@@ -53,7 +53,7 @@ elif category == "Product & Inventory":
                                                        "Supplier Performance", "Pricing Strategy"])
 elif category == "Operations & Logistics":
     question = st.sidebar.radio("Choose Dashboard:", ["Fulfillment Efficiency", "Payment Analytics", "Returns Analysis",
-                                                       "Warehouse Utilization", "Last-Mile Delivery"])
+                                                       "CSAT", "Last-Mile Delivery"])
 elif category == "Advanced Analytics":
     question = st.sidebar.radio("Choose Dashboard:", ["Predictive Sales", "Customer Churn Prediction", "Product Recommendation",
                                                        "Sentiment Analysis", "Supply Chain Optimization"])
@@ -1892,7 +1892,7 @@ elif question == "Returns Analysis": # Sidebar label for Q23
     else:
         st.error("Operations data could not be loaded. Please check your SQL connection.")
 # --- PAGE: CUSTOMER SERVICE DASHBOARD (Question 24) ---
-elif question == "Warehouse Utilization": # Sidebar label for Q24
+elif question == "CSAT": # Sidebar label for Q24
     st.header("🎧 Customer Service & Satisfaction (CSAT) Tracking")
     
     if not df_ops.empty:
