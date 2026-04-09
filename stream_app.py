@@ -1,110 +1,122 @@
 import streamlit as st
-import requests
 import pandas as pd
+import requests
 
-# --- 1. GLOBAL UI SETTINGS & FUNCTIONS ---
-st.set_page_config(page_title="Cricket Dashboard", layout="wide")
+# --- 1. CONFIGURATION ---
+# This must be the very first Streamlit command
+st.set_page_config(page_title="Cricket Test: Live Scores", layout="wide")
 
-def custom_metric(label, value):
-    """Ensures small labels and big bold values without truncation."""
-    st.markdown(f"""
-        <div style="margin-bottom: 20px;">
-            <p style="font-size: 14px; color: #808495; margin-bottom: -5px; font-weight: 500;">{label}</p>
-            <p style="font-size: 24px; font-weight: 700; white-space: nowrap;">{value}</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-# Session State Initialization
-if 'search_val' not in st.session_state: st.session_state['search_val'] = ""
-if 'q2024' not in st.session_state: st.session_state['q2024'] = None
-
-st.title("🏏 Cricket Player Dashboard")
-
-# --- 2. SEARCH SECTION ---
-col1, col2 = st.columns([4, 1])
-with col1:
-    player_query = st.text_input("Search", value=st.session_state['search_val'], placeholder="Enter name...", label_visibility="collapsed")
-with col2:
-    search_button = st.button("Find Matches", use_container_width=True)
-
-headers = {
+# Using the API key from your provided snippet
+HEADERS = {
     "x-rapidapi-key": "35af2ec44amsh9bf8173e77da1c2p13358ejsn3a9ce0e712f9",
     "x-rapidapi-host": "cricbuzz-cricket.p.rapidapi.com"
 }
 
-# API Search Logic
-if search_button and player_query:
+# # --- 2. HELPER FUNCTION ---
+# @st.cache_data(ttl=10)
+# def fetch_api(endpoint, params=None):
+#     url = f"https://cricbuzz-cricket.p.rapidapi.com/{endpoint}"
+#     try:
+#         response = requests.get(url, headers=HEADERS, params=params)
+#         response.raise_for_status() # Check for HTTP errors
+#         return response.json()
+#     except Exception as e:
+#         st.error(f"API Error: {e}")
+#         return None
+@st.cache_data(ttl=10)
+def fetch_api(endpoint, params=None):
+    url = f"https://cricbuzz-cricket.p.rapidapi.com/{endpoint}"
     try:
-        url = "https://cricbuzz-cricket.p.rapidapi.com/stats/v1/player/search"
-        response = requests.get(url, headers=headers, params={"plrN": player_query})
-        data = response.json()
-        if 'player' in data:
-            raw_df = pd.DataFrame(data['player'])
-            st.session_state['q2024'] = raw_df[['id', 'name', 'teamName']].copy()
-            st.session_state['q2024'].columns = ['player_id', 'name', 'team_name']
-    except Exception as e: st.error(f"Search Error: {e}")
-
-# --- 3. MAIN TABBED INTERFACE ---
-if st.session_state['q2024'] is not None:
-    q2024 = st.session_state['q2024']
-    q2024['display'] = q2024['name'] + " (" + q2024['team_name'] + ")"
-    options = ["-- Select Player --"] + q2024['display'].tolist()
+        response = requests.get(url, headers=HEADERS, params=params, timeout=10)
+        
+        # Check if the response is actually a success (200 OK)
+        if response.status_code == 200:
+            return response.json()
+        
+        # Handle common RapidAPI errors specifically
+        elif response.status_code == 429:
+            st.error("Rate Limit Exceeded: You have used all your free requests for today.")
+        elif response.status_code == 403:
+            st.error("Forbidden: Check if your API key is still active in RapidAPI.")
+        else:
+            st.error(f"API returned status {response.status_code}: {response.text[:100]}")
+            
+    except Exception as e:
+        st.error(f"Connection Error: {e}")
     
-    selected_option = st.selectbox("Select Result:", options)
+    return None
 
-    if selected_option != "-- Select Player --":
-        player_info = q2024[q2024['display'] == selected_option].iloc[0]
-        player_id = player_info['player_id']
+# --- 3. TEST PAGE LOGIC ---
+st.title("🏏 Live Match Scorecard Test")
 
-        # --- CREATE TABS ---
-        tab_prof, tab_bat, tab_bowl = st.tabs(["👤 Profile", "🏏 Batting Stats", "⚡ Bowling Stats"])
+# Fetching the list of all live matches
+with st.spinner("Fetching live matches..."):
+    data = fetch_api("matches/v1/recent")
 
-        # --- TAB 1: PROFILE ---
-        with tab_prof:
-            try:
-                details_url = f"https://cricbuzz-cricket.p.rapidapi.com/stats/v1/player/{player_id}"
-                det_data = requests.get(details_url, headers=headers).json()
+matches = []
+if data and "typeMatches" in data:
+    for type_match in data.get("typeMatches", []):
+        for series_matches in type_match.get('seriesMatches', []):
+            series_wrapper = series_matches.get('seriesAdWrapper')
+            if not series_wrapper:
+                continue
+            
+            series_name = series_wrapper.get('seriesName', "Unknown Series")
+            
+            for match in series_wrapper.get('matches', []):
+                info = match.get('matchInfo')
+                if info:
+                    matches.append({
+                        "matchId": info.get('matchId'),
+                        "display_name": f"{info.get('team1',{}).get('teamName')} vs {info.get('team2',{}).get('teamName')} ({series_name})",
+                        "status": info.get('status', "No status available")
+                    })
+
+if matches:
+    df_live = pd.DataFrame(matches)
+    
+    # Selectbox to pick a specific match
+    selected_index = st.selectbox(
+        "Choose a match to view details:", 
+        range(len(df_live)), 
+        format_func=lambda i: df_live.iloc[i]["display_name"]
+    )
+    selected_match = df_live.iloc[selected_index]
+    
+    st.metric("Current Status", selected_match["status"])
+    
+    # Fetching the detailed scorecard for the chosen match
+    with st.spinner("Loading detailed scorecard..."):
+        scard_data = fetch_api(f"mcenter/v1/{selected_match['matchId']}/scard")
+        scorecard = scard_data.get('scorecard', []) if scard_data else []
+
+    if not scorecard:
+        st.warning("Detailed scorecard data is not yet available for this match.")
+    else:
+        # Create tabs for each innings (e.g., Team A Innings, Team B Innings)
+        tabs = st.tabs([f"{inn.get('batteamname', 'Team')} Innings" for inn in scorecard])
+        
+        for i, inn in enumerate(scorecard):
+            with tabs[i]:
+                st.subheader(f"Score: {inn.get('score')}/{inn.get('wickets')} ({inn.get('overs')} ov)")
                 
-                st.subheader(f"Profile: {player_info['name']}")
-                p1, p2, p3, p4 = st.columns(4)
-                with p1: custom_metric("Height", det_data.get("height", "N/A"))
-                with p2: custom_metric("Role", det_data.get("role", "N/A"))
-                with p3: custom_metric("Birth Place", det_data.get("birthPlace", "N/A"))
-                with p4: custom_metric("Date of Birth", det_data.get("DoB", "N/A"))
-            except: st.error("Error loading profile.")
-
-        # --- TAB 2: BATTING ---
-        with tab_bat:
-            try:
-                bat_url = f"https://cricbuzz-cricket.p.rapidapi.com/stats/v1/player/{player_id}/batting"
-                bat_data = requests.get(bat_url, headers=headers).json()
-                if 'values' in bat_data:
-                    st.subheader("Career Batting Overview")
-                    b_cols = st.columns(4)
-                    fmts = {"Test": 1, "ODI": 2, "T20": 3, "IPL": 4}
-                    rows = bat_data['values']
-                    for i, (f_name, c_idx) in enumerate(fmts.items()):
-                        with b_cols[i]:
-                            st.markdown(f"**{f_name}**")
-                            custom_metric("Matches", rows[0]['values'][c_idx])
-                            custom_metric("Runs", rows[2]['values'][c_idx])
-                            custom_metric("Average", rows[5]['values'][c_idx])
-                            custom_metric("SR", rows[6]['values'][c_idx])
-            except: st.info("Batting data unavailable.")
-
-        # --- TAB 3: BOWLING ---
-        with tab_bowl:
-            try:
-                bowl_url = f"https://cricbuzz-cricket.p.rapidapi.com/stats/v1/player/{player_id}/bowling"
-                bowl_data = requests.get(bowl_url, headers=headers).json()
-                if 'values' in bowl_data:
-                    st.subheader("Career Bowling Overview")
-                    bw_cols = st.columns(4)
-                    for i, (f_name, c_idx) in enumerate(fmts.items()):
-                        with bw_cols[i]:
-                            st.markdown(f"**{f_name}**")
-                            custom_metric("Matches", bowl_data['values'][0]['values'][c_idx])
-                            custom_metric("Wickets", bowl_data['values'][2]['values'][c_idx])
-                            custom_metric("Economy", bowl_data['values'][9]['values'][c_idx])
-                            custom_metric("BBI", bowl_data['values'][7]['values'][c_idx])
-            except: st.info("Bowling data unavailable.")
+                # BATTING TABLE
+                bat_list = inn.get('batsman', [])
+                if bat_list:
+                    st.markdown("#### Batting")
+                    df_bat = pd.DataFrame(bat_list)
+                    # Filter for columns that actually exist in the API response
+                    cols_to_show = ['name', 'outdec', 'runs', 'balls', 'fours', 'sixes', 'strkrate']
+                    available_cols = [c for c in cols_to_show if c in df_bat.columns]
+                    st.table(df_bat[available_cols])
+                
+                # BOWLING TABLE
+                bowl_list = inn.get('bowler', [])
+                if bowl_list:
+                    st.markdown("#### Bowling")
+                    df_bowl = pd.DataFrame(bowl_list)
+                    cols_to_show = ['name', 'overs', 'maidens', 'runs', 'wickets', 'economy']
+                    available_cols = [c for c in cols_to_show if c in df_bowl.columns]
+                    st.table(df_bowl[available_cols])
+else:
+    st.info("No live matches were found in the API response. This happens if no matches are currently being played.")

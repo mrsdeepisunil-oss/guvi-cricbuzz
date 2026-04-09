@@ -24,7 +24,7 @@ def get_db_connection():
         st.error(f"Database Connection Failed: {e}")
         return None
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=10)
 def fetch_api(endpoint, params=None):
     url = f"https://cricbuzz-cricket.p.rapidapi.com/{endpoint}"
     try:
@@ -62,7 +62,7 @@ if page == "Home Page":
 # ---------------- LIVE MATCH PAGE ----------------
 elif page == "Live Match Page":
     st.title("🏏 Live Match Scorecard")
-    data = fetch_api("matches/v1/live")
+    data = fetch_api("matches/v1/recent")
     
     matches = []
     if data and "typeMatches" in data:
