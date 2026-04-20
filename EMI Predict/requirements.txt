@@ -1,9 +1,8 @@
 streamlit
-mlflow
-scikit-learn
+scikit-learn==1.4.2
 pandas
 numpy
 plotly
 matplotlib
 seaborn
-scikit-learn==1.4.2
+mlflow
